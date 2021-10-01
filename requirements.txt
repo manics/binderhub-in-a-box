@@ -1,0 +1,6 @@
+binderhub@git+https://github.com/jupyterhub/binderhub.git@master
+dockerspawner
+jupyter-repo2docker
+jupyterhub>=2.0.0b2
+repo2podman
+podmanclispawner

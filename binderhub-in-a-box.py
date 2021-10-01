@@ -6,24 +6,47 @@ import argparse
 import asyncio
 import os
 import socket
+import subprocess
 import sys
-from argparse import ArgumentParser
 
 import binderhub.app
 import jupyterhub.app
 from binderhub.binderspawner_mixin import BinderSpawnerMixin
 from binderhub.build_local import LocalRepo2dockerBuild
+from binderhub.registry import FakeRegistry
 from dockerspawner import DockerSpawner
+from podmanclispawner import PodmanCLISpawner
 from tornado.ioloop import IOLoop
-from traitlets import Bool
-from traitlets import Unicode
 
 
-# image & token are set via spawn options
-class LocalContainerSpawner(BinderSpawnerMixin, DockerSpawner):
-    cmd = Unicode("jupyter-notebook")
-    debug = Bool(True)
-    remove = Bool(True)
+class LocalContainerDockerSpawner(BinderSpawnerMixin, DockerSpawner):
+    cmd = ["jupyter-notebook"]
+    debug = True
+    remove = True
+
+
+class LocalContainerPodmanSpawner(BinderSpawnerMixin, PodmanCLISpawner):
+    cmd = ["jupyter-notebook"]
+    debug = True
+    remove = True
+
+
+class LocalRepo2dockerPodmanBuild(LocalRepo2dockerBuild):
+    def get_r2d_cmd_options(self):
+        return super().get_r2d_cmd_options() + [
+            "--engine",
+            "podman",
+        ]
+
+
+class LocalPodmanRegistry(FakeRegistry):
+    async def get_image_manifest(self, image, tag):
+        cmd = ["podman", "image", "exists", f"{image}:{tag}"]
+        print(" ".join(cmd))
+        r = subprocess.call(cmd)
+        if r == 0:
+            return {"image": image, "tag": tag}
+        return None
 
 
 s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -36,16 +59,21 @@ def run_jupyterhub(engine):
     binderhub_service_name = "binder"
 
     config = dict(
-        spawner_class=LocalContainerSpawner,
+        spawner_class=LocalContainerDockerSpawner,
         log_level="DEBUG",
-        authenticator_class="nullauthenticator.NullAuthenticator",
+        authenticator_class="null",
         hub_ip="0.0.0.0",
         hub_connect_ip=hostip,
         services=[
             {
                 "name": binderhub_service_name,
                 "admin": True,
-                "command": [sys.executable, __file__, "--binderhub"],
+                "command": [
+                    sys.executable,
+                    __file__,
+                    "--binderhub",
+                    f"--engine={engine}",
+                ],
                 "url": "http://localhost:8585",
                 "environment": {
                     "JUPYTERHUB_EXTERNAL_URL": os.getenv("JUPYTERHUB_EXTERNAL_URL", "")
@@ -58,7 +86,14 @@ def run_jupyterhub(engine):
         # },
     )
 
+    if engine == "podman":
+        config["spawner_class"] = LocalContainerPodmanSpawner
+
     app = jupyterhub.app.JupyterHub(**config)
+
+    # The rest of this method is copied from
+    # https://github.com/jupyterhub/jupyterhub/blob/2.0.0b2/jupyterhub/app.py#L3203-L3226
+    # (I have no idea what I'm doing)
 
     async def launch_instance_async(app):
         try:
@@ -102,23 +137,31 @@ def run_binderhub(engine):
         hub_url=os.getenv("JUPYTERHUB_EXTERNAL_URL") or f"http://{hostip}:8000",
     )
 
+    if engine == "podman":
+        config["use_registry"] = True
+        config["registry_class"] = LocalPodmanRegistry
+        config["image_prefix"] = "localhost/"
+        config["build_class"] = LocalRepo2dockerPodmanBuild
+
     app = binderhub.app.BinderHub(**config)
     app.initialize()
     app.start()
 
 
 if __name__ == "__main__":
-    parser = ArgumentParser("binderhub-in-a-box")
+    parser = argparse.ArgumentParser("binderhub-in-a-box")
     parser.add_argument(
         "--engine",
         default="docker",
-        choices=["docker"],
-        # choices=["docker", "podman"],
+        choices=["docker", "podman"],
         help="Container runtime",
     )
+    # This is a hidden argument so we can run BinderHub as a JupyterHub service
+    # without needing another executable script
     parser.add_argument("--binderhub", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
+    # Overwrite sys.argv, otherwise JupyterHub/BinderHub try to parse arguments
     if args.binderhub:
         sys.argv = ["binderhub"]
         run_binderhub(args.engine)
