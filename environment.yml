@@ -1,0 +1,29 @@
+name: binderhub-in-a-box
+channels:
+  - conda-forge
+dependencies:
+  # BinderHub direct dependencies
+  - docker-py=5
+  - escapism=1
+  - jinja2=3
+  - jsonschema=4
+  # Not yet released
+  # - jupyterhub>=2
+  - prometheus_client=0.11
+  - pycurl=7
+  - pyjwt=2
+  - python=3.9
+  - python-kubernetes=18
+  - python-json-logger=2
+  - tornado=6
+  - traitlets=5
+  # binderhub-in-a-box dependencies
+  - dockerspawner>=12
+  - jupyter-repo2docker>=2021.8
+  - pip=21
+  - pip:
+      - binderhub@git+https://github.com/jupyterhub/binderhub.git@master
+      # dockerspawner will install jupyterhub=1.4, this will upgrade it
+      - jupyterhub>=2.0.0b2
+      - podmanclispawner>=0.1.0
+      - repo2podman>=0.1.0

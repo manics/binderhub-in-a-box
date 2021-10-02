@@ -131,10 +131,10 @@ def run_binderhub(engine):
         banner_message='See <a href="https://github.com/jupyterhub/binderhub">'
         "BinderHub on GitHub</a>",
         hub_url_local="http://localhost:8000",
-        base_url=os.getenv("JUPYTERHUB_SERVICE_PREFIX", "/"),
-        # JUPYTERHUB_BASE_URL may not include the host
-        # hub_url=os.getenv('JUPYTERHUB_BASE_URL'),
-        hub_url=os.getenv("JUPYTERHUB_EXTERNAL_URL") or f"http://{hostip}:8000",
+        base_url=os.environ["JUPYTERHUB_SERVICE_PREFIX"],
+        # JUPYTERHUB_BASE_URL may not include the host but that should be OK
+        hub_url=os.environ["JUPYTERHUB_BASE_URL"],
+        # hub_url=os.getenv("JUPYTERHUB_EXTERNAL_URL") or f"http://{hostip}:8000",
     )
 
     if engine == "podman":
