@@ -21,8 +21,12 @@ npm install -g configurable-http-proxy
 
 ## Running binderhub-in-a-box
 
-If you are using Docker run `python binderhub-in-a-box.py`.
+You must have either Docker or Podman on your system. Run:
 
-If you are using Podman run `python binderhub-in-a-box.py --engine podman`.
+```
+python binderhub-in-a-box.py
+```
+
+If your container engine is not detected add `--engine docker` or `--engine podman`.
 
 Go to http://localhost:8000/ and you should be redirected to BinderHub.

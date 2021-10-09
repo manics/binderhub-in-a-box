@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Override the external access URL for JupyterHub by setting the
 environment variable JUPYTERHUB_EXTERNAL_URL
@@ -10,6 +11,7 @@ import subprocess
 import sys
 
 import binderhub.app
+import docker
 import jupyterhub.app
 from binderhub.binderspawner_mixin import BinderSpawnerMixin
 from binderhub.build_local import LocalRepo2dockerBuild
@@ -53,6 +55,25 @@ s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.connect(("8.8.8.8", 80))
 hostip = s.getsockname()[0]
 s.close()
+
+
+def get_engine(engine):
+    if engine != "auto":
+        return engine
+    try:
+        docker.from_env(version="auto")
+        return "docker"
+    except docker.errors.DockerException:
+        pass
+    try:
+        subprocess.check_output(["podman", "version"])
+        return "podman"
+    except Exception:
+        pass
+
+    raise ValueError(
+        "Could not detect container engine, please use the `--engine` argument"
+    )
 
 
 def run_jupyterhub(engine):
@@ -133,8 +154,8 @@ def run_binderhub(engine):
         hub_url_local="http://localhost:8000",
         base_url=os.environ["JUPYTERHUB_SERVICE_PREFIX"],
         # JUPYTERHUB_BASE_URL may not include the host but that should be OK
-        hub_url=os.environ["JUPYTERHUB_BASE_URL"],
-        # hub_url=os.getenv("JUPYTERHUB_EXTERNAL_URL") or f"http://{hostip}:8000",
+        hub_url=os.getenv("JUPYTERHUB_EXTERNAL_URL")
+        or os.environ["JUPYTERHUB_BASE_URL"],
     )
 
     if engine == "podman":
@@ -152,8 +173,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("binderhub-in-a-box")
     parser.add_argument(
         "--engine",
-        default="docker",
-        choices=["docker", "podman"],
+        default="auto",
+        choices=["auto", "docker", "podman"],
         help="Container runtime",
     )
     # This is a hidden argument so we can run BinderHub as a JupyterHub service
@@ -161,10 +182,11 @@ if __name__ == "__main__":
     parser.add_argument("--binderhub", action="store_true", help=argparse.SUPPRESS)
     args = parser.parse_args()
 
+    engine = get_engine(args.engine)
     # Overwrite sys.argv, otherwise JupyterHub/BinderHub try to parse arguments
     if args.binderhub:
         sys.argv = ["binderhub"]
-        run_binderhub(args.engine)
+        run_binderhub(engine)
     else:
         sys.argv = ["jupyterhub"]
-        run_jupyterhub(args.engine)
+        run_jupyterhub(engine)
